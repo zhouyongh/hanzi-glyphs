@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>汉字字形浏览器 · hanzi-glyphs</title>
+<style>
+:root{
+  --paper:#f6f3ec; --surface:#fdfcf9; --ink:#191713; --muted:#6e675c; --line:#e2dccf;
+  --cinnabar:#b23a2a; --cinnabar-soft:#f7e8e4; --bronze:#5f7052;
+  --bv:#2f6f4f; --mp:#33587f; --uv:#8a6d1f; --fa:#b23b3b;
+  --serif:"Songti SC","Noto Serif SC","Source Han Serif SC","SimSun",serif;
+}
+*{box-sizing:border-box}
+html{scrollbar-color:#c9c0ae var(--paper);scrollbar-width:thin}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:var(--paper)}
+::-webkit-scrollbar-thumb{background:#cfc6b4;border-radius:8px;border:2px solid var(--paper)}
+::-webkit-scrollbar-thumb:hover{background:var(--cinnabar)}
+::selection{background:var(--cinnabar-soft)}
+body{margin:0;color:var(--ink);
+  background:
+    radial-gradient(1100px 380px at 88% -90px, rgba(178,58,42,.05), transparent 62%),
+    radial-gradient(900px 320px at 8% -70px, rgba(95,112,82,.06), transparent 60%),
+    var(--paper);
+  font:15px/1.6 -apple-system,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+header{position:sticky;top:0;z-index:5;padding:14px 24px 12px;background:var(--surface);
+  border-bottom:1px solid var(--line);box-shadow:0 1px 5px rgba(25,23,19,.05)}
+.top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.seal{flex:0 0 auto;width:36px;height:36px;display:grid;place-items:center;background:var(--cinnabar);
+  color:#fff;font-family:var(--serif);font-size:21px;border-radius:6px;transform:rotate(-3deg);
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.28), 0 1px 3px rgba(178,58,42,.35)}
+h1{margin:0;font-family:var(--serif);font-size:20px;font-weight:600;letter-spacing:.05em}
+.sub{color:var(--muted);font-size:12.5px;margin-top:2px}
+.sub code,.kv code,.banner code{background:#f1ece1;padding:1px 6px;border-radius:5px;font-size:12px}
+.lang{flex:0 0 auto;display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.lang button{border:0;border-radius:0;padding:6px 13px;font-size:12.5px;background:transparent;color:var(--muted)}
+.lang button:hover{background:#f1ece1}
+.lang button.on{background:var(--cinnabar);color:#fff}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
+input[type=search]{flex:1 1 260px;min-width:200px;padding:9px 12px;font-size:15px;
+  border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);font-size:14px}
+button{padding:8px 14px;border:1px solid var(--line);border-radius:8px;background:#fff;
+  color:var(--ink);font-size:14px;cursor:pointer}
+button:hover{background:#f1ece1}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--cinnabar);outline-offset:1px}
+.count{color:var(--muted);font-size:13px;min-width:88px}
+.banner{margin:12px 0 0;padding:12px 14px;background:#fbf1ec;border:1px solid #e8c9be;
+  border-left:4px solid var(--cinnabar);border-radius:8px;font-size:13px;color:#5c3a32}
+.banner strong{display:block;margin-bottom:4px;color:var(--cinnabar)}
+main{padding:18px 24px 60px}
+.hint{color:var(--muted);font-size:14px;padding:24px 0}
+.vgrid{position:relative;width:100%}
+.cell{position:absolute;background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  padding:8px;text-align:center;cursor:pointer;display:flex;flex-direction:column;gap:4px;overflow:hidden;
+  transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease}
+.cell:hover{border-color:#d8a79c;box-shadow:0 3px 10px rgba(25,23,19,.10);transform:translateY(-2px)}
+.cell .box{width:100%;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;
+  background:#fff;border-radius:6px;overflow:hidden}
+.cell .box svg{width:100%;height:100%;display:block}
+.cell .ch{font-family:var(--serif);font-size:20px;line-height:1.2;height:26px;overflow:hidden}
+.cell .meta{font-size:11px;color:var(--muted);word-break:break-all;height:32px;overflow:hidden}
+.tag{display:inline-block;padding:0 6px;border-radius:999px;font-size:10px;line-height:16px;border:1px solid}
+.q-byte-verified{color:var(--bv);border-color:#bcd9c9}
+.q-metric-passed{color:var(--mp);border-color:#c3d3e8}
+.q-watermark-stripped{color:var(--bronze);border-color:#c6d1bd}
+.q-unverified{color:var(--uv);border-color:#e2d5a8}
+.q-failed{color:var(--fa);border-color:#e6bcbc}
+.loading{color:var(--muted);font-size:12px}
+/* A read failure must never be mistakable for an empty glyph. */
+.missing{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;background:#fbeeec;border:1px dashed var(--fa);color:var(--fa);font-size:12px;border-radius:6px}
+.missing b{font-size:12px;font-weight:650}
+.missing small{font-size:10px;opacity:.8}
+.detail{margin-top:22px;background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--cinnabar);
+  border-radius:10px;padding:18px;display:none}
+.detail.open{display:block}
+.detail h2{margin:0 0 12px;font-family:var(--serif);font-size:17px;font-weight:600}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:13px;margin:0}
+.kv dt{color:var(--muted)}.kv dd{margin:0;word-break:break-all}
+.copy{margin-left:8px;padding:2px 9px;font-size:12px}
+a{color:var(--mp)}
+a:hover{color:var(--cinnabar)}
+footer{padding:16px 24px 40px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);margin-top:24px}
+@media (max-width:640px){
+  header{position:static;padding:12px 14px 10px;box-shadow:none}
+  .seal{width:30px;height:30px;font-size:18px}
+  h1{font-size:17px}
+  .toolbar{gap:8px}
+  input[type=search]{flex-basis:100%}
+  select{flex:1 1 auto}
+  .banner{margin:10px 0 0}
+  main{padding:14px 14px 48px}
+  footer{padding:14px 14px 32px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div class="brand">
+      <span class="seal" aria-hidden="true">字</span>
+      <div>
+        <h1 id="t_title">汉字字形浏览器</h1>
+        <div class="sub" id="sub"></div>
+      </div>
+    </div>
+    <div class="lang" role="group" aria-label="Language / 语言">
+      <button id="lang-zh" type="button">中文</button>
+      <button id="lang-en" type="button">EN</button>
+    </div>
+  </div>
+  <div class="toolbar">
+    <input type="search" id="q" aria-label="search">
+    <select id="layer" aria-label="layer"></select>
+    <select id="quality" aria-label="quality"></select>
+    <button id="reset" type="button">重置</button>
+    <span class="count" id="count"></span>
+  </div>
+  <div class="banner" id="banner" hidden></div>
+</header>
+<main>
+  <div id="results"></div>
+  <section class="detail" id="detail"></section>
+</main>
+<footer id="foot"></footer>
+<script>
+"use strict";
+var I18N = {
+zh:{
+  title:"汉字字形浏览器",
+  sub:"hanzi-glyphs · {v} · {L} 层 / {g} 件 / {c} 个现代字 · 自然键 <code>(layer, path)</code>",
+  ph:"字 / 码位 / 路径",
+  allLayers:"全部层", allQuality:"全部质量", reset:"重置",
+  idle:"输入检索词或选择书体层",
+  hint:"请输入检索词，或选择书体层以浏览。字形按需自本地 <code>glyphs/</code> 读取。",
+  loading:"正在加载 {n} 层索引…", unit:"件",
+  empty:"无匹配结果。",
+  loadFail:"索引加载失败：{e}。该层本次不可检索；此状态不代表该层无字形。",
+  missT:"未能读取", missS:"本地文件读取失败",
+  dKey:"自然键", dUc:"unicode", dQ:"质量", dL:"许可", dF:"文件", dS:"出处",
+  copy:"复制", copied:"已复制",
+  noChar:"（无现代字）", noUc:"（无码位）", noSrc:"（无出处记录）", srcLoading:"正在加载出处…",
+  layerUnit:"件",
+  foot:"本浏览器自包含，索引与字形均取自本包；许可以逐件 <code>license</code> 字段为准。参阅 <a href=\"../README.md\">README.md</a>、<a href=\"../LICENSES.md\">LICENSES.md</a>、<a href=\"../manifest.json\">manifest.json</a>。「未能读取」表示本地文件读取失败，不代表该字形为空。",
+  bRootT:"字形资产不在当前服务根目录内",
+  bRoot:"当前服务根目录仅包含浏览器自身，<code>glyphs/</code> 位于其外，故无法读取。请在包根目录（同时包含 <code>glyphs/</code> 与 <code>viewer/</code> 的目录）启动服务，例如 <code>python -m http.server 8000</code>，随后访问 <code>/viewer/index.html</code>。",
+  bFileT:"本地请求被浏览器拦截",
+  bFile:"浏览器禁止 <code>file://</code> 下的本地请求。请在包根目录启动 HTTP 服务后访问本页，例如 <code>python -m http.server 8000</code>，随后访问 <code>/viewer/index.html</code>。",
+  subFail:"索引不可用，原因见页首提示。",
+  qTip:{"byte-verified":"与上游来源逐字节一致","metric-passed":"描摹指标达标（非人工核验）","watermark-stripped":"已删近白角标，其余与上游一致","unverified":"尚无合格证据"}
+},
+en:{
+  title:"Hanzi Glyph Browser",
+  sub:"hanzi-glyphs · {v} · {L} layers / {g} glyphs / {c} modern characters · natural key <code>(layer, path)</code>",
+  ph:"Character / codepoint / path",
+  allLayers:"All layers", allQuality:"All quality", reset:"Reset",
+  idle:"Enter a query or select a layer",
+  hint:"Enter a query, or select a script layer to browse. Glyphs are read locally from <code>glyphs/</code> on demand.",
+  loading:"Loading {n} layer indexes…", unit:"glyphs",
+  empty:"No matching results.",
+  loadFail:"Failed to load index: {e}. This layer is not searchable in this session; this does not imply the layer is empty.",
+  missT:"Unavailable", missS:"Local file read failed",
+  dKey:"Natural key", dUc:"Unicode", dQ:"Quality", dL:"License", dF:"File", dS:"Provenance",
+  copy:"Copy", copied:"Copied",
+  noChar:"(no modern character)", noUc:"(no codepoint)", noSrc:"(no provenance record)", srcLoading:"Loading provenance…",
+  layerUnit:"",
+  foot:"Self-contained browser; indexes and glyphs are read from this package. Licensing follows the per-glyph <code>license</code> field. See <a href=\"../README.md\">README.md</a>, <a href=\"../LICENSES.md\">LICENSES.md</a>, <a href=\"../manifest.json\">manifest.json</a>. “Unavailable” denotes a local read failure, not an empty glyph.",
+  bRootT:"Glyph assets lie outside the current server root",
+  bRoot:"The current server root contains only the browser; <code>glyphs/</code> sits outside it and cannot be read. Start the server at the package root (the directory containing both <code>glyphs/</code> and <code>viewer/</code>), e.g. <code>python -m http.server 8000</code>, then open <code>/viewer/index.html</code>.",
+  bFileT:"Local requests are blocked by the browser",
+  bFile:"Browsers prohibit local requests under <code>file://</code>. Serve the package root over HTTP, e.g. <code>python -m http.server 8000</code>, then open <code>/viewer/index.html</code>.",
+  subFail:"Index unavailable; see the notice above.",
+  qTip:{"byte-verified":"Byte-identical to the upstream source","metric-passed":"Tracing metric passed (not human-verified)","watermark-stripped":"Near-white corner mark removed; otherwise identical to upstream","unverified":"No qualifying evidence yet"}
+}};
+var LAYER_ZH = {"oracle-bone":"甲骨文","seal":"篆书","bronze":"金文","clerical":"隶书","chu":"楚文字",
+  "guwen":"傳抄古文字","qin":"秦系简牘","regular":"楷书","running":"行书","cursive":"草书",
+  "song-hans":"宋体（简）","song-hant":"宋体（繁）","hei-hant-hk":"黑体（港）"};
+var LANG = "zh";
+try{ LANG = localStorage.getItem("hg-lang") === "en" ? "en" : "zh"; }catch(e){}
+function t(k){ return I18N[LANG][k]; }
+function layerName(l){ return LANG === "zh" ? (LAYER_ZH[l] || l) : l; }
+
+var META = null, GLYPH_BASE = "../glyphs/", bannerKind = null;
+var GAP = 12, CELL_MIN = 118, TEXT_H = 84, BUFFER = 3;
+var layerData = {}, layerLoaded = {}, srcData = {}, srcLoaded = {};
+var svgCache = new Map(), inflight = new Map();
+var results = [], nodes = new Map();
+var geo = {cols:1, cellW:118, rowH:196, rows:0, height:0};
+var gridEl = null, ticking = false, mode = "idle", lastDetail = null, searchSeq = 0;
+
+function el(id){ return document.getElementById(id); }
+function esc(s){
+  return String(s==null?"":s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+function norm(s){ return (s||"").trim().toLowerCase(); }
+function fmt(s, map){ return s.replace(/\{(\w+)\}/g, function(_, k){ return map[k]; }); }
+
+/* ---- language ----------------------------------------------------------- */
+
+function applyLang(){
+  document.documentElement.lang = LANG === "zh" ? "zh-Hans" : "en";
+  document.title = t("title") + " · hanzi-glyphs";
+  el("t_title").textContent = t("title");
+  el("q").placeholder = t("ph");
+  el("q").setAttribute("aria-label", t("ph"));
+  el("reset").textContent = t("reset");
+  el("lang-zh").className = LANG === "zh" ? "on" : "";
+  el("lang-en").className = LANG === "en" ? "on" : "";
+  el("lang-zh").setAttribute("aria-pressed", LANG === "zh");
+  el("lang-en").setAttribute("aria-pressed", LANG === "en");
+  var lv = el("layer").value, qv = el("quality").value;
+  el("layer").innerHTML = '<option value="">' + esc(t("allLayers")) + "</option>" +
+    (META ? META.layers.map(function(l){
+      var n = (META.counts[l]||0).toLocaleString();
+      return '<option value="' + esc(l) + '">' + esc(layerName(l)) + " · " + n +
+        (LANG === "zh" ? " " + t("layerUnit") : "") + "</option>";
+    }).join("") : "");
+  el("layer").value = lv;
+  el("quality").innerHTML = '<option value="">' + esc(t("allQuality")) + "</option>" +
+    ["byte-verified","metric-passed","watermark-stripped","unverified"].map(function(q){
+      return '<option value="' + q + '" title="' + esc(t("qTip")[q]) + '">' + q + "</option>";
+    }).join("");
+  el("quality").value = qv;
+  el("foot").innerHTML = t("foot");
+  if(META) el("sub").innerHTML = fmt(t("sub"), {v:META.version, L:META.layers.length,
+    g:META.glyphs.toLocaleString(), c:META.chars.toLocaleString()});
+  if(bannerKind) showBanner(bannerKind);
+  if(mode === "idle") el("results").innerHTML = '<div class="hint">' + t("hint") + "</div>";
+  if(mode === "empty") el("results").innerHTML = '<div class="hint">' + t("empty") + "</div>";
+  if(mode === "grid") el("count").textContent = results.length.toLocaleString() + " " + t("unit");
+  if(mode === "idle") el("count").textContent = t("idle");
+  if(lastDetail && el("detail").className.indexOf("open") >= 0) openDetail(lastDetail, true);
+}
+function setLang(l){
+  LANG = l;
+  try{ localStorage.setItem("hg-lang", l); }catch(e){}
+  applyLang();
+}
+
+/* ---- startup diagnostics ------------------------------------------------ */
+
+function showBanner(kind){
+  bannerKind = kind;
+  var b = el("banner");
+  b.hidden = false;
+  b.innerHTML = "<strong>" + esc(t(kind === "root" ? "bRootT" : "bFileT")) + "</strong>" +
+    t(kind === "root" ? "bRoot" : "bFile");
+}
+
+function probeBase(){
+  var bases = ["../glyphs/", "glyphs/"];
+  var i = 0;
+  function next(){
+    if(i >= bases.length){ showBanner("root"); return; }
+    var base = bases[i++];
+    fetch(base + META.probe, {method:"HEAD"}).then(function(r){
+      if(r.ok){ GLYPH_BASE = base; } else { next(); }
+    }).catch(function(){ next(); });
+  }
+  next();
+}
+
+function loadMeta(){
+  return fetch("data/meta.json").then(function(r){
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  }).then(function(m){
+    META = m;
+    applyLang();
+    probeBase();
+  }).catch(function(){
+    showBanner("file");
+    el("sub").textContent = t("subFail");
+    applyLang();
+  });
+}
+
+/* ---- data loading ------------------------------------------------------- */
+
+function loadLayer(layer){
+  if(layerLoaded[layer]) return Promise.resolve(layerData[layer]||[]);
+  return fetch("data/layer-" + layer + ".json").then(function(r){
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  }).then(function(j){
+    layerData[layer] = j.rows || []; layerLoaded[layer] = true;
+    return layerData[layer];
+  }).catch(function(e){
+    layerLoaded[layer] = true; layerData[layer] = [];
+    if(!gridEl) el("results").innerHTML = '<div class="hint">' +
+      esc(fmt(t("loadFail"), {e:e.message})) + "</div>";
+    return [];
+  });
+}
+
+function loadSrc(layer){
+  if(srcLoaded[layer]) return Promise.resolve(srcData[layer]||{});
+  return fetch("data/src-" + layer + ".json").then(function(r){
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  }).then(function(j){
+    srcData[layer] = j.s || {}; srcLoaded[layer] = true;
+    return srcData[layer];
+  }).catch(function(){ srcLoaded[layer] = true; srcData[layer] = {}; return {}; });
+}
+
+/* ---- local SVG fetch: cache + in-flight dedup ---------------------------- */
+
+function svgUrl(layer, path){ return GLYPH_BASE + layer + "/" + path; }
+
+function cacheSvg(key, svg){
+  svgCache.set(key, svg);
+  if(svgCache.size > 8000){
+    var it = svgCache.keys(), n = svgCache.size - 6000;
+    for(var i=0;i<n;i++) svgCache.delete(it.next().value);
+  }
+}
+
+function fillBox(box, layer, path){
+  var key = layer + "/" + path;
+  if(svgCache.has(key)){ box.innerHTML = svgCache.get(key); return; }
+  box.innerHTML = '<div class="loading">…</div>';
+  var p = inflight.get(key);
+  if(!p){
+    p = fetch(svgUrl(layer, path), {cache:"force-cache"}).then(function(r){
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    });
+    inflight.set(key, p);
+    p.then(function(){ inflight.delete(key); }, function(){ inflight.delete(key); });
+  }
+  p.then(function(svg){
+    cacheSvg(key, svg);
+    if(box.isConnected && box.dataset.key === key) box.innerHTML = svg;
+  }).catch(function(){
+    if(box.isConnected && box.dataset.key === key)
+      box.innerHTML = '<div class="missing"><b>' + esc(t("missT")) + "</b><small>" +
+        esc(t("missS")) + "</small></div>";
+  });
+}
+
+/* ---- search ------------------------------------------------------------- */
+
+function matches(row, fq){
+  if(row[1] && row[1].indexOf(fq) >= 0) return true;
+  if(row[0] && row[0].toLowerCase().indexOf(fq) >= 0) return true;
+  if(row[2] && row[2].toLowerCase().indexOf(fq) >= 0) return true;
+  return false;
+}
+
+function runSearch(){
+  if(!META) return;
+  var q = norm(el("q").value);
+  var layer = el("layer").value, qf = el("quality").value;
+  if(!q && !layer && !qf){
+    searchSeq++;
+    results = []; gridEl = null; nodes.clear(); mode = "idle"; lastDetail = null;
+    el("results").innerHTML = '<div class="hint">' + t("hint") + "</div>";
+    el("count").textContent = t("idle");
+    el("detail").className = "detail";
+    return;
+  }
+  var layers = layer ? [layer] : META.layers;
+  var my = ++searchSeq;
+  mode = "loading";
+  el("count").textContent = fmt(t("loading"), {n:layers.length});
+  Promise.all(layers.map(loadLayer)).then(function(res){
+    if(my !== searchSeq) return;   // a newer query superseded this one
+    var all = [];
+    res.forEach(function(rows, i){
+      var lname = layers[i];
+      for(var k=0;k<rows.length;k++){
+        var row = rows[k];
+        if(qf && row[3] !== qf) continue;
+        if(q && !matches(row, q)) continue;
+        all.push([lname, row[0], row[1], row[2], row[3], row[4]]);
+      }
+    });
+    results = all;
+    el("count").textContent = results.length.toLocaleString() + " " + t("unit");
+    buildGrid();
+    var top = el("results").getBoundingClientRect().top + window.scrollY;
+    window.scrollTo({top: Math.max(0, top - headerH() - 12)});
+    renderWindow();
+  });
+}
+
+/* ---- virtual grid with keyed node recycling ------------------------------ */
+
+/* Height of the header actually occluding the viewport (0 once a static header scrolls away). */
+function headerH(){
+  var h = document.querySelector("header");
+  var r = h.getBoundingClientRect();
+  return (getComputedStyle(h).position !== "static" && r.bottom > 0) ? r.bottom : 0;
+}
+
+function computeGeo(){
+  var W = el("results").clientWidth || 800;
+  var cols = Math.max(1, Math.floor((W + GAP) / (CELL_MIN + GAP)));
+  var cellW = (W - GAP * (cols - 1)) / cols;
+  var rowH = cellW + TEXT_H + GAP;
+  var rows = Math.ceil(results.length / cols);
+  geo = {cols:cols, cellW:cellW, rowH:rowH, rows:rows, height: Math.max(0, rows * rowH - GAP)};
+}
+
+function buildGrid(){
+  nodes.clear();
+  var box = el("results");
+  if(!results.length){
+    mode = "empty"; gridEl = null;
+    box.innerHTML = '<div class="hint">' + t("empty") + "</div>";
+    return;
+  }
+  mode = "grid";
+  box.innerHTML = '<div class="vgrid"></div>';
+  gridEl = box.querySelector(".vgrid");
+  computeGeo();
+  gridEl.style.height = geo.height + "px";
+}
+
+function place(node, idx){
+  var r = Math.floor(idx / geo.cols), c = idx % geo.cols;
+  node.style.width = geo.cellW + "px";
+  node.style.left = (c * (geo.cellW + GAP)) + "px";
+  node.style.top = (r * geo.rowH) + "px";
+}
+
+function renderWindow(){
+  if(!gridEl) return;
+  var rect = gridEl.getBoundingClientRect();
+  var hh = headerH();
+  var rel = hh - rect.top;
+  var vh = window.innerHeight - hh;
+  var first = Math.max(0, Math.floor(rel / geo.rowH) - BUFFER);
+  var last = Math.min(geo.rows - 1, Math.floor((rel + vh) / geo.rowH) + BUFFER);
+  var start = first * geo.cols, end = Math.min(results.length, (last + 1) * geo.cols);
+  var needed = new Set();
+  for(var i=start;i<end;i++) needed.add(i);
+  nodes.forEach(function(node, idx){
+    if(!needed.has(idx)){ node.remove(); nodes.delete(idx); }
+  });
+  for(var idx=start;idx<end;idx++){
+    var node = nodes.get(idx);
+    if(!node){
+      node = cell(results[idx], idx);
+      nodes.set(idx, node);
+      gridEl.appendChild(node);
+    }
+    place(node, idx);
+  }
+}
+
+function cell(row, idx){
+  var layer = row[0], path = row[1];
+  var d = document.createElement("div");
+  d.className = "cell";
+  var box = document.createElement("div");
+  box.className = "box";
+  box.dataset.key = layer + "/" + path;
+  var ch = document.createElement("div");
+  ch.className = "ch";
+  ch.textContent = row[2] || "";
+  var meta = document.createElement("div");
+  meta.className = "meta";
+  meta.innerHTML = '<span class="tag q-' + esc(row[4]) + '" title="' + esc(t("qTip")[row[4]] || row[4]) +
+    '">' + esc(row[4]) + "</span><br>" + esc(row[5]);
+  d.appendChild(box); d.appendChild(ch); d.appendChild(meta);
+  d.onclick = function(){ openDetail(row); };
+  fillBox(box, layer, path);
+  return d;
+}
+
+function onScroll(){
+  if(ticking) return;
+  ticking = true;
+  requestAnimationFrame(function(){ ticking = false; renderWindow(); });
+}
+
+/* ---- detail ------------------------------------------------------------- */
+
+function openDetail(row, keepScroll){
+  lastDetail = row;
+  var layer = row[0], path = row[1], key = layer + "/" + path;
+  var d = el("detail");
+  d.className = "detail open";
+  d.innerHTML = "<h2>" + esc(row[2] || t("noChar")) + " · " + esc(layerName(layer)) + "</h2>" +
+    '<dl class="kv">' +
+    "<dt>" + esc(t("dKey")) + "</dt><dd><code>" + esc(key) + "</code>" +
+      '<button class="copy" type="button" id="copykey">' + esc(t("copy")) + "</button></dd>" +
+    "<dt>" + esc(t("dUc")) + "</dt><dd>" + esc(row[3] || t("noUc")) + "</dd>" +
+    "<dt>" + esc(t("dQ")) + "</dt><dd>" + esc(row[4]) + "</dd>" +
+    "<dt>" + esc(t("dL")) + "</dt><dd>" + esc(row[5]) + "</dd>" +
+    "<dt>" + esc(t("dF")) + '</dt><dd><a href="' + esc(svgUrl(layer, path)) +
+      '" target="_blank" rel="noopener"><code>glyphs/' + esc(key) + "</code></a></dd>" +
+    "<dt>" + esc(t("dS")) + '</dt><dd id="src">' + esc(t("srcLoading")) + "</dd>" +
+    "</dl>";
+  el("copykey").onclick = function(){
+    var b = this;
+    if(navigator.clipboard) navigator.clipboard.writeText(key).then(function(){
+      b.textContent = t("copied");
+    }, function(){});
+    else b.textContent = t("copied");
+  };
+  loadSrc(layer).then(function(s){
+    var info = s[path], dd = el("src");
+    if(!dd) return;
+    if(!info){ dd.textContent = t("noSrc"); return; }
+    dd.innerHTML = "<code>" + esc(info[0]) + "</code> · ref <code>" + esc(info[1]) + "</code><br>" +
+      '<a href="' + esc(info[2]) + '" target="_blank" rel="noopener">' + esc(info[2]) + "</a>";
+  });
+  if(!keepScroll) d.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+
+/* ---- wiring ------------------------------------------------------------- */
+
+var timer = null;
+el("q").addEventListener("input", function(){
+  clearTimeout(timer); timer = setTimeout(runSearch, 200);
+});
+el("layer").addEventListener("change", runSearch);
+el("quality").addEventListener("change", runSearch);
+el("reset").addEventListener("click", function(){
+  el("q").value = ""; el("layer").value = ""; el("quality").value = "";
+  runSearch();
+});
+el("lang-zh").addEventListener("click", function(){ setLang("zh"); });
+el("lang-en").addEventListener("click", function(){ setLang("en"); });
+document.addEventListener("keydown", function(e){
+  if(e.key === "Escape"){ el("detail").className = "detail"; lastDetail = null; }
+});
+window.addEventListener("scroll", onScroll, {passive:true});
+window.addEventListener("resize", function(){
+  if(!gridEl) return;
+  computeGeo();
+  gridEl.style.height = geo.height + "px";
+  renderWindow();
+});
+
+applyLang();
+loadMeta();
+</script>
+</body>
+</html>
